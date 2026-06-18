@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0e27;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#111b3d;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d1530;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+      <stop offset="50%" style="stop-color:#8b5cf6;stop-opacity:0.15" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+    </linearGradient>
+    <filter id="blur">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="40" />
+    </filter>
+    <filter id="textglow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="300" fill="url(#bg)" rx="12" />
+
+  <!-- Subtle grid pattern -->
+  <g opacity="0.05" stroke="#3b82f6" stroke-width="0.5">
+    <line x1="0" y1="50" x2="1200" y2="50" />
+    <line x1="0" y1="100" x2="1200" y2="100" />
+    <line x1="0" y1="150" x2="1200" y2="150" />
+    <line x1="0" y1="200" x2="1200" y2="200" />
+    <line x1="0" y1="250" x2="1200" y2="250" />
+    <line x1="100" y1="0" x2="100" y2="300" />
+    <line x1="200" y1="0" x2="200" y2="300" />
+    <line x1="300" y1="0" x2="300" y2="300" />
+    <line x1="400" y1="0" x2="400" y2="300" />
+    <line x1="500" y1="0" x2="500" y2="300" />
+    <line x1="600" y1="0" x2="600" y2="300" />
+    <line x1="700" y1="0" x2="700" y2="300" />
+    <line x1="800" y1="0" x2="800" y2="300" />
+    <line x1="900" y1="0" x2="900" y2="300" />
+    <line x1="1000" y1="0" x2="1000" y2="300" />
+    <line x1="1100" y1="0" x2="1100" y2="300" />
+  </g>
+
+  <!-- Glow orbs -->
+  <circle cx="200" cy="150" r="120" fill="#3b82f6" opacity="0.07" filter="url(#blur)" />
+  <circle cx="1000" cy="150" r="120" fill="#8b5cf6" opacity="0.07" filter="url(#blur)" />
+
+  <!-- Decorative nodes (left) -->
+  <g opacity="0.4">
+    <!-- Node cluster left -->
+    <circle cx="80" cy="80" r="3" fill="#3b82f6" />
+    <circle cx="120" cy="60" r="2" fill="#60a5fa" />
+    <circle cx="60" cy="120" r="2.5" fill="#818cf8" />
+    <circle cx="140" cy="100" r="2" fill="#3b82f6" />
+    <line x1="80" y1="80" x2="120" y2="60" stroke="#3b82f6" stroke-width="0.5" opacity="0.5" />
+    <line x1="80" y1="80" x2="60" y2="120" stroke="#3b82f6" stroke-width="0.5" opacity="0.5" />
+    <line x1="80" y1="80" x2="140" y2="100" stroke="#3b82f6" stroke-width="0.5" opacity="0.5" />
+    <line x1="120" y1="60" x2="140" y2="100" stroke="#3b82f6" stroke-width="0.3" opacity="0.3" />
+
+    <!-- Node cluster right -->
+    <circle cx="1100" cy="220" r="3" fill="#8b5cf6" />
+    <circle cx="1060" cy="240" r="2" fill="#a78bfa" />
+    <circle cx="1130" cy="190" r="2.5" fill="#818cf8" />
+    <circle cx="1080" cy="260" r="2" fill="#8b5cf6" />
+    <line x1="1100" y1="220" x2="1060" y2="240" stroke="#8b5cf6" stroke-width="0.5" opacity="0.5" />
+    <line x1="1100" y1="220" x2="1130" y2="190" stroke="#8b5cf6" stroke-width="0.5" opacity="0.5" />
+    <line x1="1100" y1="220" x2="1080" y2="260" stroke="#8b5cf6" stroke-width="0.5" opacity="0.5" />
+  </g>
+
+  <!-- Main title -->
+  <text x="600" y="110" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace" font-size="56" font-weight="bold" fill="white" text-anchor="middle" letter-spacing="3">
+    AI Sales Team
+  </text>
+
+  <!-- Subtitle -->
+  <text x="600" y="150" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace" font-size="18" fill="#94a3b8" text-anchor="middle" letter-spacing="1">
+    for Claude Code
+  </text>
+
+  <!-- Accent line -->
+  <rect x="400" y="170" width="400" height="2" fill="url(#accent)" rx="1" opacity="0.6" />
+
+  <!-- Stats badges -->
+  <g font-family="'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace" font-size="13">
+    <!-- 14 Skills -->
+    <rect x="270" y="195" width="110" height="28" rx="6" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1" opacity="0.8" />
+    <text x="325" y="214" fill="#60a5fa" text-anchor="middle" font-weight="600">14 Skills</text>
+
+    <!-- 5 Agents -->
+    <rect x="400" y="195" width="110" height="28" rx="6" fill="#1e3a5f" stroke="#3b82f6" stroke-width="1" opacity="0.8" />
+    <text x="455" y="214" fill="#60a5fa" text-anchor="middle" font-weight="600">5 Agents</text>
+
+    <!-- 4 Scripts -->
+    <rect x="530" y="195" width="110" height="28" rx="6" fill="#2d1b54" stroke="#8b5cf6" stroke-width="1" opacity="0.8" />
+    <text x="585" y="214" fill="#a78bfa" text-anchor="middle" font-weight="600">4 Scripts</text>
+
+    <!-- PDF Reports -->
+    <rect x="660" y="195" width="130" height="28" rx="6" fill="#2d1b54" stroke="#8b5cf6" stroke-width="1" opacity="0.8" />
+    <text x="725" y="214" fill="#a78bfa" text-anchor="middle" font-weight="600">PDF Reports</text>
+
+    <!-- Parallel -->
+    <rect x="810" y="195" width="120" height="28" rx="6" fill="#1a2e1a" stroke="#22c55e" stroke-width="1" opacity="0.8" />
+    <text x="870" y="214" fill="#4ade80" text-anchor="middle" font-weight="600">Parallel</text>
+  </g>
+
+  <!-- Bottom tagline -->
+  <text x="600" y="265" font-family="'Inter', 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">
+    Research prospects &#x2022; Qualify leads &#x2022; Find decision makers &#x2022; Generate outreach &#x2022; Close deals
+  </text>
+</svg>

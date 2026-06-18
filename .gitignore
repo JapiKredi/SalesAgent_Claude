@@ -1,0 +1,29 @@
+# Generated reports (output files created in working directory)
+/PROSPECT-ANALYSIS*.md
+/COMPANY-RESEARCH*.md
+/LEAD-QUALIFICATION*.md
+/DECISION-MAKERS*.md
+/OUTREACH-SEQUENCE*.md
+/FOLLOWUP-SEQUENCE*.md
+/MEETING-PREP*.md
+/CLIENT-PROPOSAL*.md
+/OBJECTION-PLAYBOOK*.md
+/IDEAL-CUSTOMER-PROFILE*.md
+/COMPETITIVE-INTEL*.md
+/SALES-REPORT*.md
+/SALES-REPORT*.pdf
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
