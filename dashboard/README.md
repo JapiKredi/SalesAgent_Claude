@@ -10,10 +10,11 @@ an unguessable URL token; spend is bounded by a daily run cap, a single-in-fligh
 concurrency guard, and a `max_turns` ceiling.
 
 ## Deploy (Railway)
-1. Create a Railway project from this repo; set the Dockerfile path to
-   `dashboard/Dockerfile`. The build copies the repo into `dashboard/salesagent/`
-   (see acceptance Step 2), installs Node 20 + the `claude` CLI, the sales repo's
-   Python deps, and the `/sales` skills.
+1. Create a Railway project from this GitHub repo. Leave **Root Directory** at the
+   repo root (default) and set **Dockerfile Path** to `dashboard/Dockerfile`. The
+   build runs from the repo root — the repo's own `skills/` / `scripts/` /
+   `install.sh` ARE the sales content — and installs Node 20 + the `claude` CLI, the
+   sales repo's Python deps, and the `/sales` skills. (No manual staging needed.)
 2. Set environment variables:
    - `ANTHROPIC_API_KEY` — your key (billing enabled).
    - `DASHBOARD_TOKEN` — a long random string (`openssl rand -hex 16`).
