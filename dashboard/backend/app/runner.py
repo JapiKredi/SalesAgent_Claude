@@ -100,7 +100,8 @@ def _iter_blocks(message):
             yield {"type": "text", "text": getattr(block, "text", "")}
 
 async def run_command(command, arg, *, sales_repo_dir: Path, run_dir: Path,
-                      pipeline_dir: Path, max_turns: int = 80):
+                      pipeline_dir: Path, max_turns: int = 80,
+                      model: str = "claude-haiku-4-5"):
     pipeline_dir.mkdir(parents=True, exist_ok=True)
     pipeline = _is_pipeline(command)
     cwd = pipeline_dir if pipeline else run_dir
@@ -108,6 +109,7 @@ async def run_command(command, arg, *, sales_repo_dir: Path, run_dir: Path,
 
     options = ClaudeAgentOptions(
         cwd=str(cwd),
+        model=model,                            # pin the model (cost control) — default Haiku
         permission_mode="bypassPermissions",   # headless: cannot answer prompts
         allowed_tools=ALLOWED_TOOLS,           # bounds blast radius to this set
         setting_sources=["user"],              # skills installed to ~/.claude by install.sh

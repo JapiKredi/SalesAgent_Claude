@@ -12,6 +12,7 @@ class Settings:
     daily_cap: int
     max_turns: int
     max_concurrent: int
+    model: str
     sales_repo_dir: Path
     workspace_dir: Path
     runs_dir: Path
@@ -32,6 +33,8 @@ def load_settings() -> Settings:
         daily_cap=int(os.environ.get("DAILY_CAP", "20")),
         max_turns=int(os.environ.get("MAX_TURNS", "80")),
         max_concurrent=int(os.environ.get("MAX_CONCURRENT", "1")),
+        model=os.environ.get("MODEL", "claude-haiku-4-5"),  # cheapest tier by default
+
         sales_repo_dir=Path(os.environ.get("SALES_REPO_DIR", "/app/salesagent")),
         workspace_dir=workspace_dir,
         runs_dir=workspace_dir / "runs",

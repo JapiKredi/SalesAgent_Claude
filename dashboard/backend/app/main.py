@@ -76,6 +76,7 @@ async def start_run(request: Request):
                 run_dir=run_dir,
                 pipeline_dir=settings.pipeline_dir,
                 max_turns=settings.max_turns,
+                model=settings.model,
             ):
                 if ev.get("kind") == "error":
                     errored = True

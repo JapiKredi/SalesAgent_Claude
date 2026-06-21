@@ -19,6 +19,7 @@ concurrency guard, and a `max_turns` ceiling.
    - `ANTHROPIC_API_KEY` — your key (billing enabled).
    - `DASHBOARD_TOKEN` — a long random string (`openssl rand -hex 16`).
    - `DAILY_CAP` — e.g. `20`. `MAX_TURNS` — e.g. `80`. `MAX_CONCURRENT` — `1`.
+   - `MODEL` — `claude-haiku-4-5` (cheapest, default), `claude-sonnet-4-6`, or `claude-opus-4-8`.
 3. **Attach a persistent volume mounted at `/app/workspace` (= `WORKSPACE_DIR`).**
    This is REQUIRED, not optional: Railway's container filesystem is ephemeral, so
    without a volume `cap.json` (your daily cost cap), per-run dirs, and the shared
@@ -44,6 +45,12 @@ concurrency guard, and a `max_turns` ceiling.
   cost ceiling. Per-run cost is logged (`[run] command=… cost_usd=…`) for visibility;
   watch those logs and tune `DAILY_CAP` to your tolerance.
 - **Single-in-flight** (`MAX_CONCURRENT=1`) stops spam-click pile-ups.
+- **Model choice is the biggest lever.** `MODEL` defaults to `claude-haiku-4-5`
+  ($1/$5 per 1M tokens) — ~5× cheaper than Opus for the same research. Bump to
+  `claude-sonnet-4-6` ($3/$15) for richer reports, or `claude-opus-4-8` ($5/$25)
+  for maximum depth. The skills do heavy web research (each fetch re-sends growing
+  context every turn), so the per-token rate dominates total cost — keep it on Haiku
+  unless you need more.
 
 ## Residual risk (read before sharing)
 - **Worst case is API-key theft, not just "a few extra runs."** Bash is enabled (the
