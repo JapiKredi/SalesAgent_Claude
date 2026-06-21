@@ -14,6 +14,10 @@
 
 ---
 
+> **Fork notice.** This repository is a fork of [**ai-sales-team-claude**](https://github.com/zubair-trabzada/ai-sales-team-claude) by **Zubair Trabzada**, used and redistributed under the MIT License. It has been modified by **JapiKredi** — see [Credits & License](#credits--license). All credit for the original design and skills belongs to the original author.
+
+---
+
 ## What This Does
 
 Type a command in Claude Code and get instant, actionable sales intelligence:
@@ -411,7 +415,7 @@ Output: MEETING-PREP.md
 ## Project Structure
 
 ```
-ai-sales-team-claude/
+SalesAgent_Claude/
 │
 ├── sales/SKILL.md                     ← Main orchestrator (routes all /sales commands)
 │
@@ -542,8 +546,19 @@ Removes all skills, agents, scripts, and templates from `~/.claude/`. Python pac
 
 ---
 
+## Credits & License
+
+- **Original project:** [ai-sales-team-claude](https://github.com/zubair-trabzada/ai-sales-team-claude) by **Zubair Trabzada** — © Zubair Trabzada, MIT License.
+- **This fork:** modifications © 2026 JapiKredi, released under the same MIT License.
+
+This is a derivative work distributed under the MIT License. The original copyright notice is retained in [LICENSE](LICENSE) as the license requires. See [LICENSE](LICENSE) for full terms.
+
+---
+
 <p align="center">
-  <strong>MIT License</strong> · Copyright (c) 2026 JapiKredi
+  <strong>MIT License</strong> · © Zubair Trabzada · Modifications © 2026 JapiKredi
+  <br>
+  Forked from <a href="https://github.com/zubair-trabzada/ai-sales-team-claude">ai-sales-team-claude</a>
   <br><br>
   <a href="https://github.com/JapiKredi/SalesAgent_Claude/issues">Report Bug</a> ·
   <a href="https://github.com/JapiKredi/SalesAgent_Claude/issues">Request Feature</a>
