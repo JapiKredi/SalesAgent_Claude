@@ -81,6 +81,10 @@ httpx>=0.27
 ```ini
 [pytest]
 asyncio_mode = auto
+# rootdir is backend/ (this file lives there); put backend/ on sys.path so `import app`
+# resolves. Without this, pytest only adds tests/ to the path and every `from app...`
+# import fails. Always run pytest from the backend/ directory.
+pythonpath = .
 markers =
     integration: hits the real Claude Agent SDK + claude CLI (costs API money); opt-in via RUN_INTEGRATION=1
 addopts = -q
@@ -131,7 +135,7 @@ Expected: `claude --version` prints a version; the python line prints `sdk-ok` a
 
 - [ ] **Step 6: Opt-in skill-load smoke (fail fast on the riskiest assumption)**
 
-This confirms the SDK can discover + run the `sales` skill *before* the runner is built on that assumption. Costs a small amount of API money, so it's opt-in.
+This confirms the SDK can discover + run the `sales` skill *before* the runner is built on that assumption. Costs a small amount of API money, so it's opt-in. Note: it runs the real `install.sh`, which writes to the dev machine's `~/.claude/skills` — harmless (those skills are already installed there), just a real local side effect.
 
 Create `dashboard/backend/tests/test_skill_load_smoke.py`:
 ```python
@@ -1056,7 +1060,19 @@ git commit -m "feat: run registry with SSE fan-out + stale sweep"
 - Create: `dashboard/backend/app/main.py`
 - Test: `dashboard/backend/tests/test_api.py`
 
-- [ ] **Step 1: Write the failing test (fake runner injected)**
+- [ ] **Step 1: Create a minimal frontend stub so the page route resolves**
+
+The `/d/{token}/` route returns `FileResponse(frontend/index.html)`, and the
+`test_dashboard_page_requires_token` test below fetches it — `FileResponse` errors
+if the file is missing. Create a stub now; Task 9 overwrites it with the real page.
+
+`frontend/index.html` (stub — replaced in Task 9):
+```html
+<!doctype html><html><head><meta charset="utf-8"><title>Sales Assistant</title></head>
+<body><h1>Sales Assistant</h1></body></html>
+```
+
+- [ ] **Step 2: Write the failing test (fake runner injected)**
 
 `tests/test_api.py`:
 ```python
@@ -1148,12 +1164,12 @@ async def test_dashboard_page_requires_token(app):
     assert "Sales Assistant" in ok.text
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Run test to verify it fails**
 
 Run: `pytest tests/test_api.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'app.main'`)
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 4: Write minimal implementation**
 
 `app/main.py`:
 ```python
@@ -1282,20 +1298,20 @@ if _FRONTEND.exists():
     app.mount("/static", StaticFiles(directory=_FRONTEND), name="static")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 5: Run test to verify it passes**
 
 Run: `pytest tests/test_api.py -v`
-Expected: PASS (9 passed)
+Expected: PASS (8 passed)
 
-- [ ] **Step 5: Run the full suite**
+- [ ] **Step 6: Run the full suite**
 
 Run: `pytest -v`
 Expected: all unit tests PASS; integration + skill-load tests SKIPPED.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add dashboard/backend/app/main.py dashboard/backend/tests/test_api.py
+git add dashboard/backend/app/main.py dashboard/backend/tests/test_api.py dashboard/frontend/index.html
 git commit -m "feat: FastAPI routes — token gate, SSE, health, concurrency, cap refund"
 ```
 
@@ -1312,7 +1328,7 @@ git commit -m "feat: FastAPI routes — token gate, SSE, health, concurrency, ca
 > is served at `/d/<token>/` by the backend route. `app.js` reads the token from the
 > path. Manual acceptance is covered in Task 11.
 
-- [ ] **Step 1: Create index.html**
+- [ ] **Step 1: Create index.html** (replaces the minimal stub written in Task 8)
 
 `frontend/index.html`:
 ```html
@@ -1726,4 +1742,14 @@ git commit -m "docs: dashboard deploy + acceptance guide (incl. residual-risk no
   discovery + CLI presence (Task 0 Step 6, Task 6 Step 4) are verified by opt-in smokes
   before the runner is relied upon — the only places reality must be confirmed against
   the installed packages.
+- **Third-review fixes:** (#2) `pytest.ini` sets `pythonpath = .` so `import app`
+  resolves from `backend/` — Task 0; (#1) Task 8 creates a minimal `frontend/index.html`
+  stub (Step 1) so the `/d/{token}/` page test passes before Task 9 writes the real page;
+  (#3) Task 8 test count corrected to 8. Task 9 Step 1 notes it replaces the stub.
+- **Accepted limitations (no change, by design for a single-trusted-user tool):**
+  SSE has no resume — a dropped connection on a long `prospect` run shows a false
+  failure in the UI while the run continues server-side. The API token gate returns
+  `403` while the page route returns `404`; both are fine. `shutil.copy2` preserves
+  mtime, which is intentional so a freshly-copied `report` input stays newest for
+  `_newest_output`.
 ```
