@@ -35,6 +35,35 @@ def _build_prompt(command: str, arg: str) -> str:
     )
     return base
 
+def _friendly_error(api_error_status, raw: str = "") -> str:
+    """Translate a failed run into a clear, actionable message.
+
+    When an underlying Anthropic API call fails, the CLI sets is_error=True with
+    subtype="success" and puts the real HTTP code in ResultMessage.api_error_status
+    (see SDK types.py). The full prospect audit fans out several agents at once, so
+    a burst can hit a 429 rate limit on lower API tiers.
+    """
+    code = api_error_status
+    if code == 429:
+        return ("The AI service is rate-limited right now (HTTP 429). The full "
+                "prospect audit runs several research agents at once, which can hit "
+                "rate limits on lower API tiers. Wait a minute and try again, or try "
+                "a lighter command like Company research first.")
+    if code == 529:
+        return ("The AI service is temporarily overloaded (HTTP 529). Please wait a "
+                "moment and try again.")
+    if isinstance(code, int) and 500 <= code <= 599:
+        return f"The AI service had a temporary error (HTTP {code}). Please try again."
+    if isinstance(code, int):
+        return f"The run failed with an API error (HTTP {code}). Please try again."
+    # No structured code, but the SDK's "error result: success" fallback still means
+    # an underlying API HTTP error the CLI didn't itemize.
+    if "error result" in raw.lower():
+        return ("The AI service hit a temporary error during this run (often a rate "
+                "limit on the prospect audit's parallel agents). Please wait a moment "
+                "and try again, or try a lighter command first.")
+    return "Something went wrong while running this command. Please try again."
+
 def _read_output(command: str, cwd: Path, last_text: str):
     """Read the skill's documented output file (glob-matched). Robust against
     intermediate scratch files a skill may drop — we only ever match the known
@@ -88,6 +117,7 @@ async def run_command(command, arg, *, sales_repo_dir: Path, run_dir: Path,
 
     last_text = ""
     cost_usd = None
+    api_error_status = None
     try:
         async for message in query(prompt=_build_prompt(command, arg), options=options):
             for ev in _iter_blocks(message):
@@ -101,8 +131,13 @@ async def run_command(command, arg, *, sales_repo_dir: Path, run_dir: Path,
             c = getattr(message, "total_cost_usd", None)
             if c is not None:
                 cost_usd = c
+            # Capture the HTTP status of a failing API call (set by the CLI when
+            # is_error=True + subtype="success"); used for a clear error message.
+            if getattr(message, "is_error", None):
+                api_error_status = getattr(message, "api_error_status", None) or api_error_status
     except Exception as exc:
-        yield {"kind": "error", "message": str(exc)}
+        print(f"[run] command={command} ERROR api_error_status={api_error_status} exc={exc}", flush=True)
+        yield {"kind": "error", "message": _friendly_error(api_error_status, str(exc))}
         return
 
     if cost_usd is not None:
