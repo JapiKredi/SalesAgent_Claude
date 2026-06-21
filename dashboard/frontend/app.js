@@ -75,18 +75,29 @@ runBtn.addEventListener("click", async () => {
 
   const { run_id } = await res.json();
   const ev = new EventSource(`${API}/status/${run_id}?token=${encodeURIComponent(TOKEN)}`);
+  let finished = false;
+  let reconnects = 0;
   ev.onmessage = (m) => {
+    reconnects = 0;                       // a message = the connection is healthy
     const data = JSON.parse(m.data);
     if (data.kind === "status") { $("statusText").textContent = data.text; }
-    else if (data.kind === "error") { ev.close(); fail(data.message || "Something went wrong."); }
+    else if (data.kind === "error") { finished = true; ev.close(); fail(data.message || "Something went wrong."); }
     else if (data.kind === "result") {
-      ev.close(); hide("statusBox"); show("outputBox");
+      finished = true; ev.close(); hide("statusBox"); show("outputBox");
       $("output").innerHTML = marked.parse(data.output || "_No output._");
       setupDownload(data);
       runBtn.disabled = false; refreshUsage();
     }
   };
-  ev.onerror = () => { ev.close(); fail("Connection lost — please try again."); };
+  // EventSource auto-reconnects when the connection drops, and the server replays
+  // the run's events on reconnect — so a long run survives a flaky network/tunnel.
+  // Don't close on a transient error; only give up after many failed retries.
+  ev.onerror = () => {
+    if (finished) return;                 // expected close after result/error
+    reconnects += 1;
+    if (reconnects > 40) { ev.close(); fail("Connection lost — reload the page; your run may still be finishing."); return; }
+    $("statusText").textContent = "Reconnecting…";
+  };
 });
 
 function setupDownload(data) {
