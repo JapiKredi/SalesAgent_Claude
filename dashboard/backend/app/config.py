@@ -7,7 +7,8 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class Settings:
-    api_key: str
+    # No API key by design — the dashboard authenticates via the logged-in `claude`
+    # session (your Claude Max subscription), so runs cost nothing per token.
     token: str
     daily_cap: int
     max_turns: int
@@ -20,15 +21,11 @@ class Settings:
     cap_file: Path
 
 def load_settings() -> Settings:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
     token = os.environ.get("DASHBOARD_TOKEN")
-    if not api_key:
-        raise ConfigError("ANTHROPIC_API_KEY is required")
     if not token:
         raise ConfigError("DASHBOARD_TOKEN is required")
     workspace_dir = Path(os.environ.get("WORKSPACE_DIR", "/app/workspace"))
     return Settings(
-        api_key=api_key,
         token=token,
         daily_cap=int(os.environ.get("DAILY_CAP", "20")),
         max_turns=int(os.environ.get("MAX_TURNS", "80")),

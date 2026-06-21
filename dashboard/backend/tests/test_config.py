@@ -2,7 +2,6 @@ import pytest
 from app.config import load_settings, ConfigError
 
 def _base_env(monkeypatch, tmp_path):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
     monkeypatch.setenv("DASHBOARD_TOKEN", "tok123")
     monkeypatch.setenv("SALES_REPO_DIR", str(tmp_path))
     monkeypatch.setenv("WORKSPACE_DIR", str(tmp_path / "ws"))
@@ -19,7 +18,6 @@ def test_loads_from_env(monkeypatch, tmp_path):
     assert s.max_turns == 55
     assert s.max_concurrent == 3
     assert s.model == "claude-sonnet-4-6"
-    assert s.api_key == "sk-ant-x"
     assert s.pipeline_dir == (tmp_path / "ws" / "pipeline")
     assert s.runs_dir == (tmp_path / "ws" / "runs")
 
@@ -35,11 +33,11 @@ def test_defaults(monkeypatch, tmp_path):
     assert s.max_concurrent == 1
     assert s.model == "claude-haiku-4-5"   # cheapest by default
 
-def test_missing_key_raises(monkeypatch, tmp_path):
+def test_no_api_key_field_subscription_only(monkeypatch, tmp_path):
+    # The dashboard is subscription-only; there is no api_key setting at all.
     _base_env(monkeypatch, tmp_path)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with pytest.raises(ConfigError):
-        load_settings()
+    s = load_settings()
+    assert not hasattr(s, "api_key")
 
 def test_missing_token_raises(monkeypatch, tmp_path):
     _base_env(monkeypatch, tmp_path)

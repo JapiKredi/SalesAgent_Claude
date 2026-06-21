@@ -1,7 +1,13 @@
 import asyncio
 import json
+import os
 import secrets
 from pathlib import Path
+
+# Subscription-only by design: never use API-key billing. Drop any ambient
+# ANTHROPIC_API_KEY so the SDK/CLI authenticates via the logged-in `claude`
+# session (Claude Max) instead. Runs then cost nothing per token.
+os.environ.pop("ANTHROPIC_API_KEY", None)
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse

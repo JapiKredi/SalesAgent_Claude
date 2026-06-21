@@ -1,83 +1,68 @@
 # Sales Dashboard
 
-A no-password web page so a non-technical user can run the `/sales` commands.
+A web page for running the `/sales` commands from a browser — for **your own use**,
+powered by **your Claude Max subscription** (no API key, no per-token cost).
 
 ## How it works
-A FastAPI backend runs the real sales skills via the Claude Agent SDK (which drives
-the `@anthropic-ai/claude-code` CLI) and streams progress + the final report to a
-single web page. Output is read from the file each skill writes. Access is gated by
-an unguessable URL token; spend is bounded by a daily run cap, a single-in-flight
-concurrency guard, and a `max_turns` ceiling.
+The dashboard runs on **your Mac** and drives the `claude` CLI, which is logged into
+your Claude Max subscription. So runs cost nothing per token — they count against your
+Max plan's usage limits. A tunnel (ngrok) exposes the local server at an HTTPS URL so
+you can reach it from another location (e.g. work). Output is read from the file each
+skill writes; access is gated by an unguessable URL token.
 
-## Deploy (Railway)
-1. Create a Railway project from this GitHub repo. Leave **Root Directory** at the
-   repo root (default) and set **Dockerfile Path** to `dashboard/Dockerfile`. The
-   build runs from the repo root — the repo's own `skills/` / `scripts/` /
-   `install.sh` ARE the sales content — and installs Node 20 + the `claude` CLI, the
-   sales repo's Python deps, and the `/sales` skills. (No manual staging needed.)
-2. Set environment variables:
-   - `ANTHROPIC_API_KEY` — your key (billing enabled).
-   - `DASHBOARD_TOKEN` — a long random string (`openssl rand -hex 16`).
-   - `DAILY_CAP` — e.g. `20`. `MAX_TURNS` — e.g. `80`. `MAX_CONCURRENT` — `1`.
-   - `MODEL` — `claude-haiku-4-5` (cheapest, default), `claude-sonnet-4-6`, or `claude-opus-4-8`.
-3. **Attach a persistent volume mounted at `/app/workspace` (= `WORKSPACE_DIR`).**
-   This is REQUIRED, not optional: Railway's container filesystem is ephemeral, so
-   without a volume `cap.json` (your daily cost cap), per-run dirs, and the shared
-   `pipeline/` are **wiped on every redeploy/crash/restart** — the cap silently
-   resets to 0 and `report` finds an empty pipeline. The volume makes both durable.
-4. **Keep replicas at 1** (`numReplicas: 1` in `railway.json`). The cap and the
-   concurrency guard are per-container; multiple replicas multiply your spend ceiling.
-5. (Strongly recommended) Restrict outbound network egress to Anthropic's API +
-   the domains the skills need (search/company sites). If a prompt injection ever
-   succeeds, egress restriction is what stops it from exfiltrating `ANTHROPIC_API_KEY`.
-6. Deploy. Health probe is `/health` (unauthenticated).
-7. The public link for Lucas is:
-   `https://<your-app>.up.railway.app/d/<DASHBOARD_TOKEN>/`
-   Send him that single link. No login, no GitHub.
+> **This is single-user, for you only.** A personal Claude subscription is for your own
+> use. Don't share the URL with anyone else — that would be using your subscription to
+> serve other people, which the consumer terms don't allow. (If you ever want a version
+> other people can use, that needs an API key — see "Alternative" below.)
 
-## Cost controls (and their real limits — read this)
-- **Daily cap is the true dollar ceiling.** It stops spend after N runs/day; a failed
-  run is refunded (not charged a slot). It only holds if the persistent volume +
-  single replica are in place (see Deploy 3–4) — otherwise it silently resets.
-- **`max_turns` is NOT a reliable cost cap.** It bounds the *orchestrator* loop, but
-  `prospect` fans out ~5 subagents via the Task tool, each with its own token budget —
-  which is where most spend happens. Treat `max_turns` as a runaway-loop guard, not a
-  cost ceiling. Per-run cost is logged (`[run] command=… cost_usd=…`) for visibility;
-  watch those logs and tune `DAILY_CAP` to your tolerance.
-- **Single-in-flight** (`MAX_CONCURRENT=1`) stops spam-click pile-ups.
-- **Model choice is the biggest lever.** `MODEL` defaults to `claude-haiku-4-5`
-  ($1/$5 per 1M tokens) — ~5× cheaper than Opus for the same research. Bump to
-  `claude-sonnet-4-6` ($3/$15) for richer reports, or `claude-opus-4-8` ($5/$25)
-  for maximum depth. The skills do heavy web research (each fetch re-sends growing
-  context every turn), so the per-token rate dominates total cost — keep it on Haiku
-  unless you need more.
+## Run it (subscription mode)
 
-## Residual risk (read before sharing)
-- **Worst case is API-key theft, not just "a few extra runs."** Bash is enabled (the
-  bundled Python scripts need it) and the agent runs with `bypassPermissions` (headless
-  can't answer prompts). Framing the arg as `<user_input>…DATA` is a *soft mitigation,
-  not a boundary* — a successful prompt injection through the input field can run
-  arbitrary shell in a container that holds `ANTHROPIC_API_KEY` in its environment, and
-  could exfiltrate that key and run up your bill. **Rotating `DASHBOARD_TOKEN` does NOT
-  undo a leaked key** — if you suspect a malicious input ran, rotate the Anthropic key.
-- **Mitigations in place / required:** scoped `allowed_tools`, untrusted-arg framing,
-  and (required) restricted outbound egress (Deploy 5) so exfiltration is hard even if
-  injection succeeds. Treat this as a **single-trusted-user** tool, not a public service.
-  Rotate `DASHBOARD_TOKEN` to revoke a forwarded link (invalidates the old link).
+1. **Stay logged into Claude on your Mac:**
+   ```bash
+   claude        # if not logged in: run /login inside it
+   ```
+2. **Start the dashboard** (no API key needed):
+   ```bash
+   cd dashboard/backend
+   python3.11 -m venv .venv && . .venv/bin/activate   # first time only
+   pip install -r requirements.txt                    # first time only
+   uvicorn app.main:app --env-file ../.env --port 8000
+   ```
+   `.env` only needs `DASHBOARD_TOKEN`, `SALES_REPO_DIR`, `WORKSPACE_DIR`, and the
+   optional knobs (`MODEL`, `DAILY_CAP`, …). It must **not** contain an API key — the
+   server drops `ANTHROPIC_API_KEY` at startup so it always uses your subscription.
+3. **Open a tunnel** so you can reach it remotely:
+   ```bash
+   ngrok http 8000
+   ```
+   ngrok prints a URL like `https://<random>.ngrok-free.dev`. Your dashboard is at:
+   ```
+   https://<random>.ngrok-free.dev/d/<DASHBOARD_TOKEN>/
+   ```
+4. From your work browser, open that URL. First visit shows an ngrok warning page —
+   click **Visit Site** once; that sets a cookie so the app's live updates work.
+
+### Caveats of this setup
+- **Your Mac must be awake** with both the server and `ngrok` running for the URL to
+  work remotely. (Sleep = link goes dead.)
+- **The ngrok free URL changes** every time you restart ngrok. For a stable URL, add a
+  free static domain in your ngrok dashboard and run `ngrok http 8000 --domain=<yours>`.
+- Usage counts against your **Max plan limits**, so the daily cap (`DAILY_CAP`) and
+  single-in-flight guard still apply as guardrails against burning through your quota.
+
+## Model
+`MODEL` defaults to `claude-haiku-4-5`. On a subscription there's no per-token charge,
+so you can raise it to `claude-sonnet-4-6` or `claude-opus-4-8` for deeper reports —
+just note heavier models consume your Max limits faster.
+
+## Alternative: always-on, API-key version (for others)
+If you ever want a version that's online 24/7 or usable by other people, that can't use
+a personal subscription — it needs an Anthropic API key and a host. The repo still
+contains `Dockerfile` + `railway.json` for that path: set `ANTHROPIC_API_KEY` (+ the
+same token/cap/model vars) on the host and deploy. That bills per token (Haiku keeps it
+cheap) and is the ToS-compliant way to let someone else use it.
 
 ## Pipeline commands
 `report` and `report-pdf` aggregate previously-generated reports from the shared
-`pipeline/` directory. Run some research/prospect commands first, then `report`,
-then `report-pdf` (which needs `SALES-REPORT.md` to exist).
-
-## Local development
-```bash
-cd dashboard/backend
-python3.11 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-DASHBOARD_TOKEN=devtok ANTHROPIC_API_KEY=sk-ant-... \
-  SALES_REPO_DIR=$HOME/Documents/Projects/SalesAgent_Claude WORKSPACE_DIR=/tmp/ws \
-  python -m uvicorn app.main:app --port 8000
-# open http://localhost:8000/d/devtok/
-python -m pytest          # unit tests; integration smokes skipped unless RUN_INTEGRATION=1
-```
+`pipeline/` directory. Run some research/prospect commands first, then `report`, then
+`report-pdf` (which needs `SALES-REPORT.md` to exist).
