@@ -1,8 +1,0 @@
-**/.git
-**/.venv
-**/__pycache__
-**/*.pyc
-**/node_modules
-workspace/
-salesagent/.git
-salesagent/.venv
