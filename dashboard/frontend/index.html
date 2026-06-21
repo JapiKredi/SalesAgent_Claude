@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Sales Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Sales Assistant</h1>
+    <p id="usage" class="usage"></p>
+  </header>
+
+  <main>
+    <section class="picker">
+      <label for="command">Pick what you want to do</label>
+      <select id="command"></select>
+      <div id="argRow" class="arg-row">
+        <input id="arg" type="text" placeholder="" />
+      </div>
+      <button id="run">Run</button>
+    </section>
+
+    <section id="statusBox" class="status hidden">
+      <span class="spinner"></span>
+      <span id="statusText">Starting…</span>
+    </section>
+
+    <section id="errorBox" class="error hidden"></section>
+
+    <section id="outputBox" class="output hidden">
+      <div class="output-actions">
+        <a id="download" href="#" download>Download</a>
+      </div>
+      <article id="output" class="markdown"></article>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
