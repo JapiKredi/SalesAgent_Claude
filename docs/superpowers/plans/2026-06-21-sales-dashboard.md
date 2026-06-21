@@ -4,7 +4,7 @@
 
 **Goal:** Ship a no-password web dashboard where a non-technical user runs the 14 `/sales` commands live and sees rendered output.
 
-**Architecture:** A FastAPI backend serves a single static page and exposes `/run` (start a job), `/status/{id}` (SSE progress + final output), `/usage`, and an unauthenticated `/health`. A runner module executes the real installed sales skills through the Claude Agent SDK (Python), which itself shells out to the `@anthropic-ai/claude-code` CLI using `ANTHROPIC_API_KEY`. Each run executes in an isolated per-run working directory; `report`/`report-pdf` operate on a shared persistent `pipeline/` directory so they can aggregate prior reports. The final report is **read from the file the skill writes**, not scraped from chat. Access is gated by an unguessable URL token; spend is bounded by a file-backed daily run cap, a single-in-flight concurrency guard, and a `max_turns` ceiling.
+**Architecture:** A FastAPI backend serves a single static page and exposes `/run` (start a job), `/status/{id}` (SSE progress + final output), `/usage`, and an unauthenticated `/health`. A runner module executes the real installed sales skills through the Claude Agent SDK (Python), which itself shells out to the `@anthropic-ai/claude-code` CLI using `ANTHROPIC_API_KEY`. Each run executes in an isolated per-run working directory; `report`/`report-pdf` operate on a shared persistent `pipeline/` directory so they can aggregate prior reports. The final report is **read from the file the skill writes**, not scraped from chat. Access is gated by an unguessable URL token. The true spend ceiling is a file-backed daily run cap (durable only on a persistent volume + single replica — see Task 10/11); a single-in-flight concurrency guard and a `max_turns` runaway-loop guard back it up (note: `max_turns` bounds the orchestrator loop, not subagent fan-out, so it is not itself a cost ceiling).
 
 **Tech Stack:** Python 3.11, FastAPI, uvicorn, sse-starlette, claude-agent-sdk, **`@anthropic-ai/claude-code` CLI (Node 20)**, pytest, vanilla HTML/CSS/JS (marked.js via CDN), Docker.
 
@@ -211,6 +211,11 @@ def test_pipeline_flag_set_only_for_report_commands():
     pipeline = {c["name"] for c in COMMANDS if c["pipeline"]}
     assert pipeline == {"report", "report-pdf"}
 
+def test_output_file_set_for_all_but_quick():
+    assert get_command("research")["output_file"] == "COMPANY-RESEARCH.md"
+    assert get_command("report-pdf")["output_file"] == "SALES-REPORT-*.pdf"
+    assert get_command("quick")["output_file"] is None
+
 def test_get_unknown_returns_none():
     assert get_command("definitely-not-a-command") is None
 ```
@@ -228,23 +233,28 @@ Expected: FAIL (`ModuleNotFoundError: No module named 'app.commands'`)
 
 pipeline=True commands (report, report-pdf) read/write the shared pipeline dir so
 they can aggregate previously-generated reports; all others run in isolation.
+
+output_file is the *documented* filename each skill writes (from the repo's
+SKILL.md / README). The runner reads exactly that file (glob-matched, so the
+timestamped report-pdf works), which is far more robust than guessing by mtime
+when a skill also drops intermediate scratch files. None = terminal-only (quick).
 """
 
 COMMANDS = [
-    {"name": "prospect",   "arg_kind": "url",         "label": "Full prospect audit",        "output": "markdown", "pipeline": False},
-    {"name": "quick",      "arg_kind": "url",         "label": "60-second snapshot",         "output": "markdown", "pipeline": False},
-    {"name": "research",   "arg_kind": "url",         "label": "Company research",           "output": "markdown", "pipeline": False},
-    {"name": "qualify",    "arg_kind": "url",         "label": "BANT/MEDDIC qualification",  "output": "markdown", "pipeline": False},
-    {"name": "contacts",   "arg_kind": "url",         "label": "Decision makers",            "output": "markdown", "pipeline": False},
-    {"name": "outreach",   "arg_kind": "prospect",    "label": "Cold outreach sequence",     "output": "markdown", "pipeline": False},
-    {"name": "followup",   "arg_kind": "prospect",    "label": "Follow-up sequence",         "output": "markdown", "pipeline": False},
-    {"name": "prep",       "arg_kind": "url",         "label": "Meeting prep brief",         "output": "markdown", "pipeline": False},
-    {"name": "proposal",   "arg_kind": "client",      "label": "Client proposal",            "output": "markdown", "pipeline": False},
-    {"name": "objections", "arg_kind": "topic",       "label": "Objection playbook",         "output": "markdown", "pipeline": False},
-    {"name": "icp",        "arg_kind": "description",  "label": "Ideal Customer Profile",     "output": "markdown", "pipeline": False},
-    {"name": "competitors","arg_kind": "url",         "label": "Competitive intel",          "output": "markdown", "pipeline": False},
-    {"name": "report",     "arg_kind": "none",        "label": "Pipeline report",            "output": "markdown", "pipeline": True},
-    {"name": "report-pdf", "arg_kind": "none",        "label": "Pipeline report (PDF)",      "output": "pdf",      "pipeline": True},
+    {"name": "prospect",   "arg_kind": "url",         "label": "Full prospect audit",        "output": "markdown", "pipeline": False, "output_file": "PROSPECT-ANALYSIS.md"},
+    {"name": "quick",      "arg_kind": "url",         "label": "60-second snapshot",         "output": "markdown", "pipeline": False, "output_file": None},
+    {"name": "research",   "arg_kind": "url",         "label": "Company research",           "output": "markdown", "pipeline": False, "output_file": "COMPANY-RESEARCH.md"},
+    {"name": "qualify",    "arg_kind": "url",         "label": "BANT/MEDDIC qualification",  "output": "markdown", "pipeline": False, "output_file": "LEAD-QUALIFICATION.md"},
+    {"name": "contacts",   "arg_kind": "url",         "label": "Decision makers",            "output": "markdown", "pipeline": False, "output_file": "DECISION-MAKERS.md"},
+    {"name": "outreach",   "arg_kind": "prospect",    "label": "Cold outreach sequence",     "output": "markdown", "pipeline": False, "output_file": "OUTREACH-SEQUENCE.md"},
+    {"name": "followup",   "arg_kind": "prospect",    "label": "Follow-up sequence",         "output": "markdown", "pipeline": False, "output_file": "FOLLOWUP-SEQUENCE.md"},
+    {"name": "prep",       "arg_kind": "url",         "label": "Meeting prep brief",         "output": "markdown", "pipeline": False, "output_file": "MEETING-PREP.md"},
+    {"name": "proposal",   "arg_kind": "client",      "label": "Client proposal",            "output": "markdown", "pipeline": False, "output_file": "CLIENT-PROPOSAL.md"},
+    {"name": "objections", "arg_kind": "topic",       "label": "Objection playbook",         "output": "markdown", "pipeline": False, "output_file": "OBJECTION-PLAYBOOK.md"},
+    {"name": "icp",        "arg_kind": "description",  "label": "Ideal Customer Profile",     "output": "markdown", "pipeline": False, "output_file": "IDEAL-CUSTOMER-PROFILE.md"},
+    {"name": "competitors","arg_kind": "url",         "label": "Competitive intel",          "output": "markdown", "pipeline": False, "output_file": "COMPETITIVE-INTEL.md"},
+    {"name": "report",     "arg_kind": "none",        "label": "Pipeline report",            "output": "markdown", "pipeline": True,  "output_file": "SALES-REPORT.md"},
+    {"name": "report-pdf", "arg_kind": "none",        "label": "Pipeline report (PDF)",      "output": "pdf",      "pipeline": True,  "output_file": "SALES-REPORT-*.pdf"},
 ]
 
 _BY_NAME = {c["name"]: c for c in COMMANDS}
@@ -256,7 +266,7 @@ def get_command(name: str):
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_commands.py -v`
-Expected: PASS (6 passed)
+Expected: PASS (7 passed)
 
 - [ ] **Step 5: Commit**
 
@@ -709,12 +719,14 @@ git commit -m "feat: friendly status mapping for SDK activity"
 > `_iter_blocks` here if they differ from what Task 0 Step 5 recorded.
 
 ### Design notes baked into the code below
-- **Output is read from the file the skill writes** (newest `*.md`, or `*.pdf` for
-  `report-pdf`) — not scraped from chat. Falls back to the final assistant text only
-  for terminal-only commands like `quick` that write no file.
-- **Per-run isolation:** non-pipeline commands run in their own `run_dir`; their
-  output is copied into the shared `pipeline_dir` afterward so `report` can aggregate.
-  Pipeline commands (`report`, `report-pdf`) run directly in `pipeline_dir`.
+- **Output is read from the skill's documented file** (the catalog's `output_file`,
+  glob-matched) — not scraped from chat, and not "newest file by mtime" (which could
+  grab an intermediate scratch file). Falls back to the final assistant text only for
+  terminal-only commands like `quick` that write no file.
+- **Per-run isolation:** non-pipeline commands run in their own `run_dir`; their output
+  is copied into the shared `pipeline_dir` afterward so `report` can aggregate, then the
+  `run_dir` is deleted to bound disk. Pipeline commands (`report`, `report-pdf`) run
+  directly in `pipeline_dir`.
 - **Cost/abuse bounds:** `max_turns` ceiling; `allowed_tools` whitelist (note: Bash is
   required by the bundled scripts, so it stays — see README residual-risk note); the
   user `arg` is framed as untrusted DATA, never instructions.
@@ -723,8 +735,7 @@ git commit -m "feat: friendly status mapping for SDK activity"
 
 `tests/test_runner.py`:
 ```python
-from pathlib import Path
-from app.runner import _build_prompt, _newest_output, _read_output, _is_pipeline
+from app.runner import _build_prompt, _read_output, _is_pipeline
 
 def test_pipeline_detection():
     assert _is_pipeline("report") is True
@@ -740,21 +751,25 @@ def test_prompt_omits_data_block_when_no_arg():
     p = _build_prompt("report", "")
     assert "<user_input>" not in p
 
-def test_newest_output_prefers_pdf_for_report_pdf(tmp_path):
-    (tmp_path / "SALES-REPORT.md").write_text("md")
-    pdf = tmp_path / "SALES-REPORT-2026.pdf"
-    pdf.write_text("pdf")
-    assert _newest_output(tmp_path, want_pdf=True) == pdf
-
-def test_newest_output_none_when_empty(tmp_path):
-    assert _newest_output(tmp_path, want_pdf=False) is None
-
-def test_read_output_reads_md_file(tmp_path):
-    f = tmp_path / "RESEARCH.md"
-    f.write_text("# Report body")
+def test_read_output_reads_documented_md_file(tmp_path):
+    (tmp_path / "COMPANY-RESEARCH.md").write_text("# Report body")
     out, files = _read_output("research", tmp_path, last_text="chatter")
     assert out == "# Report body"
-    assert files == ["RESEARCH.md"]
+    assert files == ["COMPANY-RESEARCH.md"]
+
+def test_read_output_picks_timestamped_pdf_for_report_pdf(tmp_path):
+    (tmp_path / "SALES-REPORT.md").write_text("md")          # intermediate, ignored
+    (tmp_path / "SALES-REPORT-2026-06-21.pdf").write_text("pdf")
+    out, files = _read_output("report-pdf", tmp_path, last_text="")
+    assert files == ["SALES-REPORT-2026-06-21.pdf"]
+    assert "Download" in out
+
+def test_read_output_ignores_unrelated_intermediate_files(tmp_path):
+    # A skill scratch file must NOT be mistaken for the report (the old mtime bug).
+    (tmp_path / "scratch-notes.md").write_text("intermediate junk")
+    out, files = _read_output("research", tmp_path, last_text="fallback text")
+    assert files == []                  # no COMPANY-RESEARCH.md present
+    assert out == "fallback text"
 
 def test_read_output_falls_back_to_text_for_terminal_command(tmp_path):
     out, files = _read_output("quick", tmp_path, last_text="quick snapshot text")
@@ -802,31 +817,28 @@ def _build_prompt(command: str, arg: str) -> str:
             f"<user_input>\n{arg}\n</user_input>\n"
         )
     base += (
-        f"Use the `sales` skill to perform `{command}` and write the documented "
+        f"Use the `sales` skill to perform `{command}` and write its documented "
         "output file into the current working directory. When finished, briefly "
         "state which file you wrote."
     )
     return base
 
-def _newest_output(cwd: Path, want_pdf: bool):
-    pattern = "*.pdf" if want_pdf else "*.md"
-    files = list(cwd.glob(pattern))
-    if not files:
-        return None
-    return max(files, key=lambda p: p.stat().st_mtime)
-
 def _read_output(command: str, cwd: Path, last_text: str):
+    """Read the skill's documented output file (glob-matched). Robust against
+    intermediate scratch files a skill may drop — we only ever match the known
+    filename, never 'whatever was written last'. Falls back to the agent's final
+    text for terminal-only commands (quick) or if the file is unexpectedly absent.
+    """
     cmd = get_command(command)
-    want_pdf = bool(cmd and cmd["output"] == "pdf")
-    newest = _newest_output(cwd, want_pdf=want_pdf)
-    if newest is None and want_pdf:
-        # PDF expected but missing — surface any markdown the report step produced.
-        newest = _newest_output(cwd, want_pdf=False)
-    if newest is None:
-        return (last_text or "").strip(), []           # terminal-only (e.g. quick)
-    if newest.suffix == ".pdf":
-        return f"PDF report generated: **{newest.name}** — use the Download button.", [newest.name]
-    return newest.read_text(), [newest.name]
+    pattern = cmd["output_file"] if cmd else None
+    if pattern:
+        matches = sorted(cwd.glob(pattern), key=lambda p: p.stat().st_mtime)
+        if matches:
+            chosen = matches[-1]   # newest among the *documented-name* matches only
+            if chosen.suffix == ".pdf":
+                return f"PDF report generated: **{chosen.name}** — use the Download button.", [chosen.name]
+            return chosen.read_text(), [chosen.name]
+    return (last_text or "").strip(), []
 
 def _iter_blocks(message):
     """Normalize an SDK message into {'type','name'/'text'} dicts.
@@ -856,12 +868,13 @@ async def run_command(command, arg, *, sales_repo_dir: Path, run_dir: Path,
         cwd=str(cwd),
         permission_mode="bypassPermissions",   # headless: cannot answer prompts
         allowed_tools=ALLOWED_TOOLS,           # bounds blast radius to this set
-        setting_sources=["user", "project"],   # skills installed to ~/.claude by install.sh
+        setting_sources=["user"],              # skills installed to ~/.claude by install.sh
         add_dirs=[str(sales_repo_dir)],         # lets skills read repo templates/scripts if needed
-        max_turns=max_turns,                    # hard ceiling on runaway cost
+        max_turns=max_turns,                    # caps the orchestrator loop (NOT subagent fan-out)
     )
 
     last_text = ""
+    cost_usd = None
     try:
         async for message in query(prompt=_build_prompt(command, arg), options=options):
             for ev in _iter_blocks(message):
@@ -870,18 +883,28 @@ async def run_command(command, arg, *, sales_repo_dir: Path, run_dir: Path,
                     yield {"kind": "status", "text": status}
                 if ev.get("type") == "text" and ev.get("text"):
                     last_text = ev["text"]
+            # Best-effort: the SDK's final ResultMessage carries total cost on most
+            # versions. Logged for cost visibility — daily cap is the real ceiling.
+            c = getattr(message, "total_cost_usd", None)
+            if c is not None:
+                cost_usd = c
     except Exception as exc:
         yield {"kind": "error", "message": str(exc)}
         return
 
+    if cost_usd is not None:
+        print(f"[run] command={command} cost_usd={cost_usd:.4f}", flush=True)
+
     output, files = _read_output(command, cwd, last_text)
-    # Copy non-pipeline outputs into the shared pipeline dir so `report` can aggregate.
+    # Copy non-pipeline outputs into the shared pipeline dir so `report` can aggregate,
+    # then delete the transient per-run dir to bound disk growth.
     if not pipeline:
         for name in files:
             try:
                 shutil.copy2(cwd / name, pipeline_dir / name)
             except OSError:
                 pass
+        shutil.rmtree(run_dir, ignore_errors=True)
     yield {"kind": "result", "output": output, "files": files}
 ```
 
@@ -1102,6 +1125,11 @@ def app(monkeypatch, tmp_path):
 async def _client(app):
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://t")
 
+async def _drain(app):
+    # Deterministically wait for background drive() tasks to finish (decrement
+    # inflight / refund cap) instead of sleeping on a timer.
+    await asyncio.gather(*list(app.state.tasks))
+
 async def test_health_is_unauthenticated(app):
     async with await _client(app) as c:
         r = await c.get("/health")
@@ -1132,12 +1160,11 @@ async def test_cap_enforced(app):
     body = {"command": "research", "arg": "https://a.com"}
     async with await _client(app) as c:
         assert (await c.post("/api/run", json=body, headers=headers)).status_code == 200
-        # let each run finish so the concurrency guard frees up
-        await asyncio.sleep(0.05)
+        await _drain(app)   # run finishes -> concurrency guard frees, cap=1
         assert (await c.post("/api/run", json=body, headers=headers)).status_code == 200
-        await asyncio.sleep(0.05)
+        await _drain(app)   # cap=2 (== DAILY_CAP)
         r = await c.post("/api/run", json=body, headers=headers)
-    assert r.status_code == 429
+    assert r.status_code == 429   # blocked by daily cap
 
 async def test_failed_run_refunds_cap(app):
     async def failing_runner(command, arg, **kwargs):
@@ -1146,9 +1173,16 @@ async def test_failed_run_refunds_cap(app):
     headers = {"X-Dashboard-Token": "secret-tok"}
     async with await _client(app) as c:
         await c.post("/api/run", json={"command": "research", "arg": "https://a.com"}, headers=headers)
-        await asyncio.sleep(0.05)
+        await _drain(app)
         u = (await c.get("/api/usage", headers=headers)).json()
     assert u["used"] == 0   # refunded
+
+async def test_malformed_body_returns_400(app):
+    async with await _client(app) as c:
+        r = await c.post("/api/run", content="not json at all",
+                         headers={"X-Dashboard-Token": "secret-tok",
+                                  "Content-Type": "application/json"})
+    assert r.status_code == 400
 
 async def test_usage_endpoint(app):
     async with await _client(app) as c:
@@ -1218,7 +1252,12 @@ async def dashboard_page(token: str):
 @app.post("/api/run")
 async def start_run(request: Request):
     _check_token(request)
-    body = await request.json()
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("body must be an object")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request.")
     try:
         command = validate_command(body.get("command", ""))
         arg = validate_arg(command, body.get("arg", ""))
@@ -1301,7 +1340,7 @@ if _FRONTEND.exists():
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `pytest tests/test_api.py -v`
-Expected: PASS (8 passed)
+Expected: PASS (9 passed)
 
 - [ ] **Step 6: Run the full suite**
 
@@ -1544,6 +1583,7 @@ git commit -m "feat: dashboard frontend (single page, /static assets, path token
 **Files:**
 - Create: `dashboard/Dockerfile`
 - Create: `dashboard/railway.json`
+- Create: `dashboard/.dockerignore`
 
 - [ ] **Step 1: Create Dockerfile**
 
@@ -1598,11 +1638,33 @@ CMD ["uvicorn", "app.main:app", "--app-dir", "/app/backend", "--host", "0.0.0.0"
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": { "builder": "DOCKERFILE", "dockerfilePath": "dashboard/Dockerfile" },
-  "deploy": { "restartPolicyType": "ON_FAILURE", "healthcheckPath": "/health" }
+  "deploy": { "restartPolicyType": "ON_FAILURE", "healthcheckPath": "/health", "numReplicas": 1 }
 }
 ```
 
-- [ ] **Step 3: Local container build + smoke (no API call needed)**
+> `numReplicas: 1` is **load-bearing**, not cosmetic: the daily cap (`cap.json`) and
+> the in-memory concurrency guard are **per-container**. With ≥2 replicas both
+> multiply (each replica gets its own cap + its own in-flight counter), silently
+> doubling your real spend ceiling. Keep this at 1.
+
+- [ ] **Step 3: Create .dockerignore**
+
+The deploy step `cp`s the whole SalesAgent repo into the build context; without this,
+Docker pulls in `.git`, virtualenvs, and caches (slow builds, bloated image).
+
+`dashboard/.dockerignore`:
+```
+**/.git
+**/.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+workspace/
+salesagent/.git
+salesagent/.venv
+```
+
+- [ ] **Step 4: Local container build + smoke (no API call needed)**
 
 Run:
 ```bash
@@ -1617,12 +1679,12 @@ docker rm -f sd
 ```
 Expected: health JSON, usage JSON, and a CLI version string. If any fails, fix the Dockerfile before deploying.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add dashboard/Dockerfile dashboard/railway.json
+git add dashboard/Dockerfile dashboard/railway.json dashboard/.dockerignore
 echo "dashboard/salesagent/" >> .gitignore && git add .gitignore
-git commit -m "feat: Dockerfile (Node20 + claude CLI + sales deps) + Railway config"
+git commit -m "feat: Dockerfile (Node20 + claude CLI + sales deps) + Railway config + .dockerignore"
 ```
 
 ---
@@ -1656,23 +1718,44 @@ concurrency guard, and a `max_turns` ceiling.
    - `ANTHROPIC_API_KEY` — your key (billing enabled).
    - `DASHBOARD_TOKEN` — a long random string (`openssl rand -hex 16`).
    - `DAILY_CAP` — e.g. `20`. `MAX_TURNS` — e.g. `80`. `MAX_CONCURRENT` — `1`.
-3. Deploy. Health probe is `/health` (unauthenticated).
-4. The public link for Lucas is:
+3. **Attach a persistent volume mounted at `/app/workspace` (= `WORKSPACE_DIR`).**
+   This is REQUIRED, not optional: Railway's container filesystem is ephemeral, so
+   without a volume `cap.json` (your daily cost cap), per-run dirs, and the shared
+   `pipeline/` are **wiped on every redeploy/crash/restart** — the cap silently
+   resets to 0 and `report` finds an empty pipeline. The volume makes both durable.
+4. **Keep replicas at 1** (`numReplicas: 1` in `railway.json`). The cap and the
+   concurrency guard are per-container; multiple replicas multiply your spend ceiling.
+5. (Strongly recommended) Restrict outbound network egress to Anthropic's API +
+   the domains the skills need (search/company sites). If a prompt injection ever
+   succeeds, egress restriction is what stops it from exfiltrating `ANTHROPIC_API_KEY`.
+6. Deploy. Health probe is `/health` (unauthenticated).
+7. The public link for Lucas is:
    `https://<your-app>.up.railway.app/d/<DASHBOARD_TOKEN>/`
    Send him that single link. No login, no GitHub.
 
-## Cost controls
-- **Daily cap** stops spend after N runs/day; a failed run is refunded (not charged a slot).
-- **Single-in-flight** stops spam-click pile-ups.
-- **`max_turns`** caps a runaway run (`prospect` launches 5 research agents — the priciest command).
+## Cost controls (and their real limits — read this)
+- **Daily cap is the true dollar ceiling.** It stops spend after N runs/day; a failed
+  run is refunded (not charged a slot). It only holds if the persistent volume +
+  single replica are in place (see Deploy 3–4) — otherwise it silently resets.
+- **`max_turns` is NOT a reliable cost cap.** It bounds the *orchestrator* loop, but
+  `prospect` fans out ~5 subagents via the Task tool, each with its own token budget —
+  which is where most spend happens. Treat `max_turns` as a runaway-loop guard, not a
+  cost ceiling. Per-run cost is logged (`[run] command=… cost_usd=…`) for visibility;
+  watch those logs and tune `DAILY_CAP` to your tolerance.
+- **Single-in-flight** (`MAX_CONCURRENT=1`) stops spam-click pile-ups.
 
 ## Residual risk (read before sharing)
-- **Bash is enabled** for the agent because the bundled Python scripts need it, and
-  the agent runs with `bypassPermissions` (headless can't answer prompts). The URL
-  token gates *discovery*, not *intent*: anyone Lucas forwards the link to can submit
-  inputs. `allowed_tools` is scoped and the user input is framed as untrusted DATA,
-  but treat this as a **single-trusted-user** tool, not a public service. Rotate
-  `DASHBOARD_TOKEN` to revoke a leaked link (this invalidates the old link).
+- **Worst case is API-key theft, not just "a few extra runs."** Bash is enabled (the
+  bundled Python scripts need it) and the agent runs with `bypassPermissions` (headless
+  can't answer prompts). Framing the arg as `<user_input>…DATA` is a *soft mitigation,
+  not a boundary* — a successful prompt injection through the input field can run
+  arbitrary shell in a container that holds `ANTHROPIC_API_KEY` in its environment, and
+  could exfiltrate that key and run up your bill. **Rotating `DASHBOARD_TOKEN` does NOT
+  undo a leaked key** — if you suspect a malicious input ran, rotate the Anthropic key.
+- **Mitigations in place / required:** scoped `allowed_tools`, untrusted-arg framing,
+  and (required) restricted outbound egress (Deploy 5) so exfiltration is hard even if
+  injection succeeds. Treat this as a **single-trusted-user** tool, not a public service.
+  Rotate `DASHBOARD_TOKEN` to revoke a forwarded link (invalidates the old link).
 - **Token in query string** for SSE/download (EventSource can't send headers), so it
   may appear in proxy/access logs. Acceptable for this threat model; rotate if leaked.
 
@@ -1701,11 +1784,12 @@ In order (pipeline commands depend on earlier output):
 - Open `https://<app>/d/<token>/` — page loads (CSS/JS from `/static`), dropdown shows 14 commands.
 - Open `https://<app>/d/` and `https://<app>/d/wrong/` — confirm neither exposes the app (404).
 - Run `research` with a real company URL — live status updates; **markdown renders from the written file**; **Download .md** works.
-- Run `prospect` with a real URL — confirm the 5-agent run completes within `max_turns` and renders.
+- Run `prospect` with a real URL — confirm the multi-minute 5-agent run **streams status to completion without dropping** (sse-starlette pings keep the connection alive past Railway's edge idle timeout), then renders. Check the run logs show a `[run] … cost_usd=…` line.
 - Run `report` — confirm it aggregates the prior runs.
 - Run `report-pdf` — a **Download PDF** button appears and downloads a real PDF (proves reportlab is installed).
 - Click **Run** twice quickly — confirm the second is rejected with the in-progress message (concurrency guard).
 - Exhaust the daily cap — confirm the friendly "try again tomorrow" message; confirm a deliberately-failing run did **not** consume a slot.
+- **Persistence check:** note the remaining-runs count, trigger a redeploy, reload — confirm the count is **unchanged** (proves the volume holds `cap.json`) and a prior `report` still sees its pipeline. If the count reset to full, the volume isn't mounted at `WORKSPACE_DIR` — fix before sharing the link.
 
 - [ ] **Step 5: Commit**
 
@@ -1746,10 +1830,26 @@ git commit -m "docs: dashboard deploy + acceptance guide (incl. residual-risk no
   resolves from `backend/` — Task 0; (#1) Task 8 creates a minimal `frontend/index.html`
   stub (Step 1) so the `/d/{token}/` page test passes before Task 9 writes the real page;
   (#3) Task 8 test count corrected to 8. Task 9 Step 1 notes it replaces the stub.
+- **Fourth-review fixes (operational/production):**
+  - Persistent volume at `WORKSPACE_DIR` required so the daily cap + pipeline state
+    survive Railway's ephemeral disk (Task 10 `railway.json` note, Task 11 Deploy 3 +
+    acceptance persistence check). This was the one issue that genuinely undermined the
+    cost cap.
+  - Single-replica invariant made explicit (`numReplicas: 1`, Deploy 4, README).
+  - `max_turns` reframed everywhere as a runaway-loop guard, not a cost ceiling; daily
+    cap named the true ceiling; per-run cost logged (`[run] … cost_usd=…`).
+  - Output read by **documented filename** (`output_file` in the catalog, glob-matched)
+    instead of newest-mtime — removes the intermediate-scratch-file fragility (Task 1/6,
+    new test `test_read_output_ignores_unrelated_intermediate_files`).
+  - Per-run dir deleted after copy to bound disk growth (Task 6).
+  - Security: explicit API-key-exfiltration consequence + required egress restriction +
+    "rotating the token does not undo a leaked key" (README residual-risk, Deploy 5).
+  - Malformed `/api/run` body now returns 400 not 500 (Task 8, new test).
+  - Timing-dependent tests replaced with deterministic task-draining `_drain()` (Task 8).
+  - `.dockerignore` added; `setting_sources` trimmed to `["user"]` for consistency.
 - **Accepted limitations (no change, by design for a single-trusted-user tool):**
   SSE has no resume — a dropped connection on a long `prospect` run shows a false
-  failure in the UI while the run continues server-side. The API token gate returns
-  `403` while the page route returns `404`; both are fine. `shutil.copy2` preserves
-  mtime, which is intentional so a freshly-copied `report` input stays newest for
-  `_newest_output`.
+  failure in the UI while the run continues server-side (acceptance Step 4 verifies a
+  long run streams to completion under normal conditions). The API token gate returns
+  `403` while the page route returns `404`; both are fine.
 ```
